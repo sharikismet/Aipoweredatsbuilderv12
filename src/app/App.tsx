@@ -21,7 +21,7 @@ interface Profile {
   career_domain: CareerDomainId | null;
 }
 
-type Route = "landing" | "auth" | "career" | "onboarding" | "dashboard";
+type Route = "landing" | "auth-signup" | "auth-signin" | "career" | "onboarding" | "dashboard";
 
 function routeForProfile(p: Profile): Route {
   if (!p.career_domain) return "career";
@@ -103,16 +103,25 @@ export default function App() {
       />
 
       {route === "landing" && (
-        <Landing onGetStarted={() => setRoute("auth")} onSignIn={() => setRoute("auth")} />
+        <Landing onGetStarted={() => setRoute("auth-signup")} onSignIn={() => setRoute("auth-signin")} />
       )}
-      {route === "auth" && <AuthScreen onAuthed={handleAuthed} onBack={() => setRoute("landing")} />}
+      {(route === "auth-signup" || route === "auth-signin") && (
+        <AuthScreen
+          onAuthed={handleAuthed}
+          onBack={() => setRoute("landing")}
+          initialMode={route === "auth-signin" ? "signin" : "signup"}
+        />
+      )}
       {route === "career" && profile && (
         <CareerPicker
           initial={profile.career_domain}
+          initialCustomLabel={(profile as any).custom_career_label ?? null}
           onComplete={async () => {
             const p = await loadProfile();
             if (p) setRoute(p.onboarded ? "dashboard" : "onboarding");
           }}
+          onBack={profile.onboarded ? () => setRoute("dashboard") : handleSignOut}
+          backLabel={profile.onboarded ? "← Back to dashboard" : "Sign out & go back"}
         />
       )}
       {route === "onboarding" && profile && (
@@ -127,7 +136,12 @@ export default function App() {
         />
       )}
       {route === "dashboard" && profile && (
-        <Dashboard profile={profile} onProfileUpdate={setProfile} onSignOut={handleSignOut} />
+        <Dashboard
+          profile={profile}
+          onProfileUpdate={setProfile}
+          onSignOut={handleSignOut}
+          onChangeCareer={() => setRoute("career")}
+        />
       )}
     </div>
   );

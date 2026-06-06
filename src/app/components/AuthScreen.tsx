@@ -5,10 +5,11 @@ import { toast } from "sonner";
 interface Props {
   onAuthed: () => void;
   onBack: () => void;
+  initialMode?: "signin" | "signup";
 }
 
-export function AuthScreen({ onAuthed, onBack }: Props) {
-  const [mode, setMode] = useState<"signin" | "signup">("signup");
+export function AuthScreen({ onAuthed, onBack, initialMode = "signup" }: Props) {
+  const [mode, setMode] = useState<"signin" | "signup">(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");

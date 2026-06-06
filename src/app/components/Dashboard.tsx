@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api, getAccessToken } from "../../lib/supabase";
 import { DashboardHeader } from "./DashboardHeader";
 import { PricingCards } from "./PricingCards";
+import { AccountView } from "./AccountView";
 import { CareerTier, SubscriptionTier, TIER_LABEL } from "../../lib/tier";
 import { CareerDomainId } from "../../lib/careerDomains";
 import { Download, FileText, Loader2, Sparkles } from "lucide-react";
@@ -42,11 +43,12 @@ interface Props {
   profile: Profile;
   onProfileUpdate: (p: Profile) => void;
   onSignOut: () => void;
+  onChangeCareer: () => void;
 }
 
-type View = "matches" | "cvs" | "pricing";
+type View = "matches" | "cvs" | "pricing" | "account";
 
-export function Dashboard({ profile, onProfileUpdate, onSignOut }: Props) {
+export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer }: Props) {
   const [view, setView] = useState<View>("matches");
   const [matches, setMatches] = useState<Match[]>([]);
   const [tailored, setTailored] = useState<Tailored[]>([]);
@@ -144,11 +146,12 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut }: Props) {
         domainId={profile.career_domain}
         onSignOut={onSignOut}
         onUpgrade={() => setView("pricing")}
+        onOpenAccount={() => setView("account")}
       />
 
       <div className="max-w-7xl mx-auto px-6">
         <nav className="flex gap-8 border-b border-border">
-          {(["matches", "cvs", "pricing"] as const).map((v) => (
+          {(["matches", "cvs", "account", "pricing"] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -156,7 +159,7 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut }: Props) {
                 view === v ? "text-primary border-b-2 border-primary -mb-px" : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {v === "matches" ? "Job Matches" : v === "cvs" ? `Tailored CVs (${tailored.length})` : "Plans"}
+              {v === "matches" ? "Job Matches" : v === "cvs" ? `Tailored CVs (${tailored.length})` : v === "account" ? "My Account" : "Plans"}
             </button>
           ))}
         </nav>
@@ -257,6 +260,10 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut }: Props) {
               </div>
             )}
           </div>
+        )}
+
+        {view === "account" && (
+          <AccountView profile={profile} onProfileUpdate={onProfileUpdate} onChangeCareer={onChangeCareer} />
         )}
 
         {view === "pricing" && (

@@ -169,11 +169,15 @@ app.put(`${PREFIX}/career`, async (c) => {
   const u = await authUser(c);
   if (!u) return c.json({ error: "Unauthorized" }, 401);
   try {
-    const { career_domain } = await c.req.json();
+    const { career_domain, custom_career_label } = await c.req.json();
     if (!career_domain) return c.json({ error: "career_domain required" }, 400);
     const profile = (await kv.get(`profile:${u.id}`)) ?? {};
     profile.career_domain = career_domain;
+    profile.custom_career_label = career_domain === "other" ? (custom_career_label ?? null) : null;
     await kv.set(`profile:${u.id}`, profile);
+    if (career_domain === "other" && custom_career_label) {
+      await kv.set(`custom_career_request:${u.id}:${Date.now()}`, { user_id: u.id, label: custom_career_label, created_at: new Date().toISOString() });
+    }
     return c.json({ profile });
   } catch (e) {
     return c.json({ error: `Career save failed: ${String(e)}` }, 500);
@@ -338,10 +342,14 @@ Description: ${job.description}
 # CANDIDATE RESUME (source of truth)
 ${JSON.stringify({
   contact: resume.contact_info,
+  profile_extras: resume.contact_info?.extras ?? {},
   skills: resume.skills,
   education: resume.education,
   experience: resume.experience,
+  leadership_experience: resume.heldLeadershipRole,
 }, null, 2)}
+
+When relevant, surface profile_extras like GitHub, license numbers, portfolio, or certifications in the contact header or a dedicated section. Use employmentType on each experience (internship, trainee, contract, executive, etc.) to set the right framing.
 
 Generate the tailored CV now.`;
 

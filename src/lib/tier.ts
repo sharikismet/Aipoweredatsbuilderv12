@@ -16,6 +16,7 @@ export interface ExperienceEntry {
   current?: boolean;
   bullets: string[];
   isLeadership?: boolean;
+  employmentType?: string;
   meta?: Record<string, string>;
 }
 

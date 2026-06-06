@@ -2,7 +2,7 @@ import { useState } from "react";
 import { api, getAccessToken } from "../../lib/supabase";
 import { TagInput } from "./TagInput";
 import { EducationEntry, ExperienceEntry, TIER_LABEL } from "../../lib/tier";
-import { getDomain, CareerDomainId } from "../../lib/careerDomains";
+import { getDomain, CareerDomainId, EMPLOYMENT_TYPES } from "../../lib/careerDomains";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,12 +20,20 @@ export function OnboardingForm({ initialName, initialEmail, domainId, onComplete
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
-  const [contact, setContact] = useState({
+  const [contact, setContact] = useState<{
+    full_name: string;
+    email: string;
+    phone: string;
+    location: string;
+    headline: string;
+    extras: Record<string, string>;
+  }>({
     full_name: initialName ?? "",
     email: initialEmail ?? "",
     phone: "",
     location: "",
     headline: "",
+    extras: {},
   });
   const [education, setEducation] = useState<EducationEntry[]>([{ school: "", degree: "", status: "ongoing", endYear: "" }]);
   const [experience, setExperience] = useState<ExperienceEntry[]>([]);
@@ -77,7 +85,7 @@ export function OnboardingForm({ initialName, initialEmail, domainId, onComplete
         </div>
 
         {step === 0 && (
-          <Section title="Who are you?" subtitle="Basic contact details for the header of your CV.">
+          <Section title="Who are you?" subtitle="Basic contact details plus a few profile-level fields tailored to your field.">
             <Grid>
               <Field label="Full name"><Input value={contact.full_name} onChange={(v) => setContact({ ...contact, full_name: v })} /></Field>
               <Field label="Headline"><Input value={contact.headline} onChange={(v) => setContact({ ...contact, headline: v })} placeholder="e.g. Backend engineer, distributed systems" /></Field>
@@ -85,6 +93,24 @@ export function OnboardingForm({ initialName, initialEmail, domainId, onComplete
               <Field label="Phone"><Input value={contact.phone} onChange={(v) => setContact({ ...contact, phone: v })} /></Field>
               <Field label="Location"><Input value={contact.location} onChange={(v) => setContact({ ...contact, location: v })} placeholder="City, Country" /></Field>
             </Grid>
+
+            {domain.profileExtras.length > 0 && (
+              <div className="mt-6 pt-6 border-t border-border">
+                <div className="font-mono text-[10px] uppercase tracking-widest text-primary mb-4">{domain.label} · Profile details</div>
+                <Grid>
+                  {domain.profileExtras.map((pf) => (
+                    <Field key={pf.key} label={pf.label}>
+                      <Input
+                        type={pf.type ?? "text"}
+                        value={contact.extras?.[pf.key] ?? ""}
+                        placeholder={pf.placeholder}
+                        onChange={(v) => setContact({ ...contact, extras: { ...(contact.extras ?? {}), [pf.key]: v } })}
+                      />
+                    </Field>
+                  ))}
+                </Grid>
+              </div>
+            )}
           </Section>
         )}
 
@@ -121,6 +147,17 @@ export function OnboardingForm({ initialName, initialEmail, domainId, onComplete
                 <Grid>
                   <Field label="Company / Organization"><Input value={x.company} onChange={(v) => updateAt(experience, setExperience, i, { company: v })} /></Field>
                   <Field label="Role / Title"><Input value={x.role} onChange={(v) => updateAt(experience, setExperience, i, { role: v })} /></Field>
+                  <Field label="Employment type">
+                    <select
+                      value={x.employmentType ?? "full_time"}
+                      onChange={(ev) => updateAt(experience, setExperience, i, { employmentType: ev.target.value })}
+                      className="w-full bg-input-background border border-border focus:border-primary outline-none px-4 py-3 text-foreground"
+                    >
+                      {EMPLOYMENT_TYPES.map((t) => (
+                        <option key={t.id} value={t.id}>{t.label}</option>
+                      ))}
+                    </select>
+                  </Field>
                   <Field label="Start year"><Input value={x.startYear} onChange={(v) => updateAt(experience, setExperience, i, { startYear: v })} placeholder="2022" /></Field>
                   <Field label="End year">
                     <Input value={x.current ? "Present" : (x.endYear ?? "")} onChange={(v) => updateAt(experience, setExperience, i, { endYear: v, current: false })} placeholder="2024 or leave empty" disabled={x.current} />
@@ -155,7 +192,7 @@ export function OnboardingForm({ initialName, initialEmail, domainId, onComplete
                 </Field>
               </RowCard>
             ))}
-            <AddButton onClick={() => setExperience([...experience, { company: "", role: "", startYear: "", endYear: "", bullets: [""], meta: {} }])}>Add experience</AddButton>
+            <AddButton onClick={() => setExperience([...experience, { company: "", role: "", startYear: "", endYear: "", bullets: [""], meta: {}, employmentType: "full_time" }])}>Add experience</AddButton>
 
             <div className="mt-8 flex items-center gap-3 p-4 border border-border bg-card">
               <input type="checkbox" id="exec-lead" checked={heldLeadership} onChange={(e) => setHeldLeadership(e.target.checked)} className="accent-primary" />

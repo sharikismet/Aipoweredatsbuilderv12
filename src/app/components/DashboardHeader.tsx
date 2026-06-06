@@ -11,9 +11,10 @@ interface Props {
   domainId: CareerDomainId | null;
   onSignOut: () => void;
   onUpgrade: () => void;
+  onOpenAccount: () => void;
 }
 
-export function DashboardHeader({ fullName, email, tier, subscription, creditsRemaining, domainId, onSignOut, onUpgrade }: Props) {
+export function DashboardHeader({ fullName, email, tier, subscription, creditsRemaining, domainId, onSignOut, onUpgrade, onOpenAccount }: Props) {
   const domain = getDomain(domainId);
   const DomainIcon = domain.icon;
   return (
@@ -43,10 +44,10 @@ export function DashboardHeader({ fullName, email, tier, subscription, creditsRe
           </button>
 
           <div className="hidden md:flex items-center gap-3 pl-3 border-l border-border">
-            <div className="text-right">
-              <div className="text-sm leading-tight">{fullName || "—"}</div>
-              <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{email}</div>
-            </div>
+            <button onClick={onOpenAccount} className="text-right group" aria-label="Open my account">
+              <div className="text-sm leading-tight group-hover:text-primary transition-colors">{fullName || "—"}</div>
+              <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground group-hover:text-foreground">{email} · my account</div>
+            </button>
             <button onClick={onSignOut} className="p-2 text-muted-foreground hover:text-foreground" aria-label="Sign out">
               <LogOut size={16} />
             </button>

@@ -1,25 +1,40 @@
 import { useState } from "react";
 import { CAREER_DOMAINS, CareerDomainId } from "../../lib/careerDomains";
 import { api, getAccessToken } from "../../lib/supabase";
-import { Loader2, ArrowRight } from "lucide-react";
+import { Loader2, ArrowRight, LogOut } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
   initial?: CareerDomainId | null;
+  initialCustomLabel?: string | null;
   onComplete: (domain: CareerDomainId) => void;
+  onBack: () => void;
+  backLabel?: string;
 }
 
-export function CareerPicker({ initial, onComplete }: Props) {
+export function CareerPicker({ initial, initialCustomLabel, onComplete, onBack, backLabel = "← Back" }: Props) {
   const [selected, setSelected] = useState<CareerDomainId | null>(initial ?? null);
+  const [customLabel, setCustomLabel] = useState(initialCustomLabel ?? "");
   const [saving, setSaving] = useState(false);
 
   async function save() {
     if (!selected) return;
+    if (selected === "other" && !customLabel.trim()) {
+      toast.error("Tell us what your career is so we can add it as an option later.");
+      return;
+    }
     setSaving(true);
     try {
       const token = await getAccessToken();
       if (!token) throw new Error("Not signed in");
-      await api("/career", { method: "PUT", token, body: { career_domain: selected } });
+      await api("/career", {
+        method: "PUT",
+        token,
+        body: {
+          career_domain: selected,
+          custom_career_label: selected === "other" ? customLabel.trim() : null,
+        },
+      });
       onComplete(selected);
     } catch (e: any) {
       console.error("Career save failed:", e);
@@ -32,6 +47,17 @@ export function CareerPicker({ initial, onComplete }: Props) {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto px-6 py-12">
+        <div className="flex items-center justify-between mb-10 gap-4 flex-wrap">
+          <button
+            type="button"
+            onClick={onBack}
+            className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground"
+          >
+            {backLabel.startsWith("Sign out") && <LogOut size={12} />}
+            {backLabel}
+          </button>
+        </div>
+
         <div className="mb-10">
           <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-3">
             Step 00 · Pick your field
@@ -42,7 +68,7 @@ export function CareerPicker({ initial, onComplete }: Props) {
           </p>
         </div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border border border-border mb-10">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-px bg-border border border-border mb-6">
           {CAREER_DOMAINS.map((d) => {
             const Icon = d.icon;
             const active = selected === d.id;
@@ -71,6 +97,22 @@ export function CareerPicker({ initial, onComplete }: Props) {
             );
           })}
         </div>
+
+        {selected === "other" && (
+          <div className="border border-primary bg-card p-6 mb-6">
+            <div className="font-mono text-xs uppercase tracking-widest text-primary mb-3">Tell us your career</div>
+            <p className="text-sm text-muted-foreground mb-4">
+              We'll log this so we can add it as a proper option in a future update. Be specific — "Logistics manager", "Marine biologist", "Civil engineer".
+            </p>
+            <input
+              type="text"
+              value={customLabel}
+              onChange={(e) => setCustomLabel(e.target.value)}
+              placeholder="What's your career?"
+              className="w-full bg-input-background border border-border focus:border-primary outline-none px-4 py-3 text-foreground"
+            />
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
