@@ -46,11 +46,12 @@ interface Props {
   onChangeCareer: () => void;
   onBuildCV: () => void;
   onGoToLanding: () => void;
+  onGoToAdmin?: () => void;
 }
 
 type View = "matches" | "cvs" | "pricing" | "account";
 
-export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer, onBuildCV, onGoToLanding }: Props) {
+export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer, onBuildCV, onGoToLanding, onGoToAdmin }: Props) {
   const [view, setView] = useState<View>("matches");
   const [matches, setMatches] = useState<Match[]>([]);
   const [tailored, setTailored] = useState<Tailored[]>([]);
@@ -183,12 +184,22 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer,
               </button>
             ))}
           </nav>
-          <button
-            onClick={onGoToLanding}
-            className="py-4 font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors"
-          >
-            ← Back to home
-          </button>
+          <div className="flex items-center gap-6">
+            {onGoToAdmin && (
+              <button
+                onClick={onGoToAdmin}
+                className="py-4 font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors"
+              >
+                Admin
+              </button>
+            )}
+            <button
+              onClick={onGoToLanding}
+              className="py-4 font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors"
+            >
+              ← Back to home
+            </button>
+          </div>
         </div>
 
         {view === "matches" && (

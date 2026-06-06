@@ -20,11 +20,25 @@ export function AuthScreen({ onAuthed, onBack, initialMode = "signup" }: Props) 
     setLoading(true);
     try {
       if (mode === "signup") {
-        await api("/signup", { method: "POST", body: { email, password, full_name: fullName } });
-        const { error } = await supabase().auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        toast.success("Account created");
-        onAuthed();
+        try {
+          await api("/signup", { method: "POST", body: { email, password, full_name: fullName } });
+          const { error } = await supabase().auth.signInWithPassword({ email, password });
+          if (error) throw error;
+          toast.success("Account created");
+          onAuthed();
+        } catch (signupErr: any) {
+          // Check if this is a duplicate email error
+          if (signupErr?.code === "ALREADY_REGISTERED" ||
+              signupErr?.status === 409 ||
+              signupErr?.message?.toLowerCase().includes("already registered") ||
+              signupErr?.message?.toLowerCase().includes("already exists")) {
+            toast("This email is already registered. Please sign in instead.", { duration: 4000 });
+            setMode("signin");
+            setLoading(false);
+            return;
+          }
+          throw signupErr;
+        }
       } else {
         const { error } = await supabase().auth.signInWithPassword({ email, password });
         if (error) throw error;

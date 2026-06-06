@@ -30,9 +30,14 @@ export async function api<T = any>(
   let json: any = null;
   try { json = text ? JSON.parse(text) : null; } catch { /* non-json response */ }
   if (!res.ok) {
-    const msg = json?.error || text || `Request failed: ${res.status}`;
+    const msg = json?.message || json?.error || text || `Request failed: ${res.status}`;
     console.error(`[api ${method} ${path}]`, msg);
-    throw new Error(msg);
+    // Create error with the message but also attach the full response
+    const error: any = new Error(msg);
+    error.status = res.status;
+    error.code = json?.error;
+    error.details = json;
+    throw error;
   }
   return json as T;
 }

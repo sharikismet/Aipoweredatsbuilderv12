@@ -1,12 +1,23 @@
-import { ArrowRight, Target, FileText, Zap } from "lucide-react";
+import { ArrowRight, Target, FileText, Zap, User, LogOut, Wand2 } from "lucide-react";
+
+interface LandingProfile {
+  full_name?: string;
+  email?: string;
+}
 
 interface Props {
+  profile?: LandingProfile | null;
   onGetStarted: () => void;
   onSignIn: () => void;
   onBuildCV: () => void;
+  onGoToAccount?: () => void;
+  onSignOut?: () => void;
 }
 
-export function Landing({ onGetStarted, onSignIn, onBuildCV }: Props) {
+export function Landing({ profile, onGetStarted, onSignIn, onBuildCV, onGoToAccount, onSignOut }: Props) {
+  const signedIn = !!profile?.email;
+  const displayName = profile?.full_name || profile?.email?.split("@")[0] || "Account";
+
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b border-border">
@@ -14,9 +25,28 @@ export function Landing({ onGetStarted, onSignIn, onBuildCV }: Props) {
           <div className="font-mono text-xs uppercase tracking-widest">
             <span className="text-primary">●</span> ATS Engine
           </div>
-          <div className="flex items-center gap-6">
-            <button onClick={onSignIn} className="font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground">Sign in</button>
-            <button onClick={onGetStarted} className="bg-primary text-primary-foreground px-5 py-2.5 font-mono text-xs uppercase tracking-widest hover:opacity-90">Start free</button>
+          <div className="flex items-center gap-3">
+            {signedIn ? (
+              <>
+                <button
+                  onClick={onGoToAccount}
+                  className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 font-mono text-xs uppercase tracking-widest hover:opacity-90"
+                >
+                  <User size={14} /> {displayName}
+                </button>
+                <button
+                  onClick={onSignOut}
+                  className="inline-flex items-center gap-2 border border-border px-4 py-2.5 font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground hover:border-foreground"
+                >
+                  <LogOut size={14} /> Sign out
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={onSignIn} className="font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground">Sign in</button>
+                <button onClick={onGetStarted} className="bg-primary text-primary-foreground px-5 py-2.5 font-mono text-xs uppercase tracking-widest hover:opacity-90">Start free</button>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -55,6 +85,22 @@ export function Landing({ onGetStarted, onSignIn, onBuildCV }: Props) {
               </div>
             ))}
           </div>
+
+          {/* Build-from-JD lives on the tier ladder so users can jump straight
+              from picking their tier to pasting a job description. */}
+          <div className="mt-10 border border-border bg-card p-8 flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between">
+            <div className="max-w-2xl">
+              <div className="font-mono text-xs uppercase tracking-widest text-primary mb-2">Build with a job description</div>
+              <h3 className="mb-2">Paste any LinkedIn or Indeed JD — we'll mirror its language.</h3>
+              <p className="text-muted-foreground text-sm">Every bullet rewritten to match the recruiter's keywords, scoped to your tier on the ladder above.</p>
+            </div>
+            <button
+              onClick={onBuildCV}
+              className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-4 font-mono uppercase tracking-widest text-sm hover:opacity-90 shrink-0"
+            >
+              <Wand2 size={16} /> Build from JD
+            </button>
+          </div>
         </div>
       </section>
 
@@ -77,9 +123,15 @@ export function Landing({ onGetStarted, onSignIn, onBuildCV }: Props) {
       <section className="bg-primary text-primary-foreground">
         <div className="max-w-7xl mx-auto px-6 py-20 lg:py-32 flex flex-col lg:flex-row items-end justify-between gap-8">
           <h2 className="text-primary-foreground max-w-3xl">Apply smart.<br/>Apply once.<br/>Get hired.</h2>
-          <button onClick={onGetStarted} className="inline-flex items-center gap-2 bg-primary-foreground text-primary px-8 py-5 font-mono uppercase tracking-widest text-sm hover:opacity-90">
-            Start free <ArrowRight size={16} />
-          </button>
+          {signedIn ? (
+            <button onClick={onGoToAccount} className="inline-flex items-center gap-2 bg-primary-foreground text-primary px-8 py-5 font-mono uppercase tracking-widest text-sm hover:opacity-90">
+              Open dashboard <ArrowRight size={16} />
+            </button>
+          ) : (
+            <button onClick={onGetStarted} className="inline-flex items-center gap-2 bg-primary-foreground text-primary px-8 py-5 font-mono uppercase tracking-widest text-sm hover:opacity-90">
+              Start free <ArrowRight size={16} />
+            </button>
+          )}
         </div>
       </section>
 

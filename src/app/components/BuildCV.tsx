@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ArrowLeft, Download, Loader2, Sparkles, FileText } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Sparkles, FileText, LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 import { api, getAccessToken } from "../../lib/supabase";
 
@@ -33,6 +33,7 @@ export function BuildCV({ profile, onProfileUpdate, onBack, onSaved }: Props) {
   const [company, setCompany] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
+  const [template, setTemplate] = useState<"classic" | "modern" | "minimal">("classic");
   const [generating, setGenerating] = useState(false);
   const [markdown, setMarkdown] = useState<string>("");
   const [meta, setMeta] = useState<Tailored | null>(null);
@@ -52,7 +53,7 @@ export function BuildCV({ profile, onProfileUpdate, onBack, onSaved }: Props) {
       const res = await api<{ tailored: Tailored; profile: Profile }>("/tailor-custom", {
         method: "POST",
         token: token ?? undefined,
-        body: { jobTitle, company, location, description },
+        body: { jobTitle, company, location, description, template },
       });
       onProfileUpdate(res.profile);
       setMeta(res.tailored);
@@ -135,6 +136,32 @@ export function BuildCV({ profile, onProfileUpdate, onBack, onSaved }: Props) {
 
         <div className="grid lg:grid-cols-12 gap-8">
           <div className="lg:col-span-5 space-y-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <LayoutTemplate size={14} className="text-primary" />
+                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Pick a template</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  { id: "classic", name: "Classic", desc: "Summary · Experience · Education" },
+                  { id: "modern", name: "Modern", desc: "Profile · Competencies · Roles" },
+                  { id: "minimal", name: "Minimal", desc: "Tight · No summary" },
+                ] as const).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTemplate(t.id)}
+                    className={`text-left p-3 border transition-colors ${template === t.id ? "border-primary bg-primary/5" : "border-border hover:border-foreground"}`}
+                  >
+                    <div className="font-mono text-[11px] uppercase tracking-widest mb-1">{t.name}</div>
+                    <div className="text-[10px] text-muted-foreground leading-snug">{t.desc}</div>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-[10px] text-muted-foreground">
+                Your account details (contact, education, experience, skills) are pulled automatically.
+              </p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Job title</span>

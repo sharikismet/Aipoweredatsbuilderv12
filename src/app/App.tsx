@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import { supabase, api, getAccessToken } from "../lib/supabase";
 import { Landing } from "./components/Landing";
 import { AuthScreen } from "./components/AuthScreen";
@@ -7,6 +7,7 @@ import { CareerPicker } from "./components/CareerPicker";
 import { OnboardingForm } from "./components/OnboardingForm";
 import { Dashboard } from "./components/Dashboard";
 import { BuildCV } from "./components/BuildCV";
+import { AdminPage } from "./components/AdminPage";
 import { CareerTier, SubscriptionTier } from "../lib/tier";
 import { CareerDomainId } from "../lib/careerDomains";
 import { Loader2 } from "lucide-react";
@@ -22,7 +23,7 @@ interface Profile {
   career_domain: CareerDomainId | null;
 }
 
-type Route = "landing" | "auth-signup" | "auth-signin" | "career" | "onboarding" | "dashboard" | "build";
+type Route = "landing" | "auth-signup" | "auth-signin" | "career" | "onboarding" | "dashboard" | "build" | "admin";
 
 function routeForProfile(p: Profile): Route {
   if (!p.career_domain) return "career";
@@ -70,15 +71,12 @@ export default function App() {
   async function handleAuthed() {
     const p = await loadProfile();
     if (!p) return;
-    // If the user clicked "Build my CV" before signing in, send them there
-    // once onboarding is complete; otherwise route through onboarding first.
     if (pendingAfterAuth === "build") {
       setPendingAfterAuth(null);
       if (p.onboarded && p.career_domain) {
         setRoute("build");
         return;
       }
-      // Stash the pending intent again so we land on build after onboarding
       setPendingAfterAuth("build");
     }
     setRoute(routeForProfile(p));
@@ -90,13 +88,31 @@ export default function App() {
       return;
     }
     if (profile) {
-      // Logged in but not done with onboarding — push them through it first
       setPendingAfterAuth("build");
       setRoute(routeForProfile(profile));
       return;
     }
     setPendingAfterAuth("build");
     setRoute("auth-signup");
+  }
+
+  async function generateBaselineAndGo() {
+    try {
+      const token = await getAccessToken();
+      toast.message("Generating your baseline ATS CV…");
+      const res = await api<{ profile: Profile }>("/tailor-baseline", {
+        method: "POST",
+        token: token ?? undefined,
+        body: { template: "classic" },
+      });
+      if (res.profile) setProfile(res.profile);
+      toast.success("Baseline CV ready — find it under Tailored CVs.");
+    } catch (e: any) {
+      console.error("baseline gen failed:", e);
+      toast.error(e?.message ?? "Baseline generation failed");
+    } finally {
+      setRoute("dashboard");
+    }
   }
 
   async function handleSignOut() {
@@ -133,9 +149,12 @@ export default function App() {
 
       {route === "landing" && (
         <Landing
+          profile={profile}
           onGetStarted={() => setRoute("auth-signup")}
           onSignIn={() => setRoute("auth-signin")}
           onBuildCV={handleBuildMyCV}
+          onGoToAccount={() => setRoute("dashboard")}
+          onSignOut={handleSignOut}
         />
       )}
       {(route === "auth-signup" || route === "auth-signin") && (
@@ -168,7 +187,9 @@ export default function App() {
               setPendingAfterAuth(null);
               setRoute("build");
             } else {
-              setRoute("dashboard");
+              // New signups: auto-generate a baseline ATS CV so the
+              // dashboard isn't empty on first load.
+              await generateBaselineAndGo();
             }
           }}
           onBack={() => setRoute("career")}
@@ -182,6 +203,7 @@ export default function App() {
           onChangeCareer={() => setRoute("career")}
           onBuildCV={() => setRoute("build")}
           onGoToLanding={() => setRoute("landing")}
+          onGoToAdmin={() => setRoute("admin")}
         />
       )}
       {route === "build" && profile && (
@@ -190,6 +212,9 @@ export default function App() {
           onProfileUpdate={(p) => setProfile((cur) => ({ ...(cur as Profile), ...(p as any) }))}
           onBack={() => setRoute("dashboard")}
         />
+      )}
+      {route === "admin" && profile && (
+        <AdminPage onBack={() => setRoute("dashboard")} />
       )}
     </div>
   );
