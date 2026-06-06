@@ -6,6 +6,7 @@ import { AuthScreen } from "./components/AuthScreen";
 import { CareerPicker } from "./components/CareerPicker";
 import { OnboardingForm } from "./components/OnboardingForm";
 import { Dashboard } from "./components/Dashboard";
+import { BuildCV } from "./components/BuildCV";
 import { CareerTier, SubscriptionTier } from "../lib/tier";
 import { CareerDomainId } from "../lib/careerDomains";
 import { Loader2 } from "lucide-react";
@@ -21,7 +22,7 @@ interface Profile {
   career_domain: CareerDomainId | null;
 }
 
-type Route = "landing" | "auth-signup" | "auth-signin" | "career" | "onboarding" | "dashboard";
+type Route = "landing" | "auth-signup" | "auth-signin" | "career" | "onboarding" | "dashboard" | "build";
 
 function routeForProfile(p: Profile): Route {
   if (!p.career_domain) return "career";
@@ -33,6 +34,7 @@ export default function App() {
   const [route, setRoute] = useState<Route>("landing");
   const [profile, setProfile] = useState<Profile | null>(null);
   const [booting, setBooting] = useState(true);
+  const [pendingAfterAuth, setPendingAfterAuth] = useState<Route | null>(null);
 
   async function loadProfile() {
     const token = await getAccessToken();
@@ -67,7 +69,34 @@ export default function App() {
 
   async function handleAuthed() {
     const p = await loadProfile();
-    if (p) setRoute(routeForProfile(p));
+    if (!p) return;
+    // If the user clicked "Build my CV" before signing in, send them there
+    // once onboarding is complete; otherwise route through onboarding first.
+    if (pendingAfterAuth === "build") {
+      setPendingAfterAuth(null);
+      if (p.onboarded && p.career_domain) {
+        setRoute("build");
+        return;
+      }
+      // Stash the pending intent again so we land on build after onboarding
+      setPendingAfterAuth("build");
+    }
+    setRoute(routeForProfile(p));
+  }
+
+  function handleBuildMyCV() {
+    if (profile && profile.onboarded && profile.career_domain) {
+      setRoute("build");
+      return;
+    }
+    if (profile) {
+      // Logged in but not done with onboarding — push them through it first
+      setPendingAfterAuth("build");
+      setRoute(routeForProfile(profile));
+      return;
+    }
+    setPendingAfterAuth("build");
+    setRoute("auth-signup");
   }
 
   async function handleSignOut() {
@@ -103,7 +132,11 @@ export default function App() {
       />
 
       {route === "landing" && (
-        <Landing onGetStarted={() => setRoute("auth-signup")} onSignIn={() => setRoute("auth-signin")} />
+        <Landing
+          onGetStarted={() => setRoute("auth-signup")}
+          onSignIn={() => setRoute("auth-signin")}
+          onBuildCV={handleBuildMyCV}
+        />
       )}
       {(route === "auth-signup" || route === "auth-signin") && (
         <AuthScreen
@@ -131,7 +164,12 @@ export default function App() {
           domainId={profile.career_domain}
           onComplete={async () => {
             await loadProfile();
-            setRoute("dashboard");
+            if (pendingAfterAuth === "build") {
+              setPendingAfterAuth(null);
+              setRoute("build");
+            } else {
+              setRoute("dashboard");
+            }
           }}
           onBack={() => setRoute("career")}
         />
@@ -142,6 +180,15 @@ export default function App() {
           onProfileUpdate={setProfile}
           onSignOut={handleSignOut}
           onChangeCareer={() => setRoute("career")}
+          onBuildCV={() => setRoute("build")}
+          onGoToLanding={() => setRoute("landing")}
+        />
+      )}
+      {route === "build" && profile && (
+        <BuildCV
+          profile={profile}
+          onProfileUpdate={(p) => setProfile((cur) => ({ ...(cur as Profile), ...(p as any) }))}
+          onBack={() => setRoute("dashboard")}
         />
       )}
     </div>

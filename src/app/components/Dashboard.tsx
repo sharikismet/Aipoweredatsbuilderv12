@@ -5,7 +5,7 @@ import { PricingCards } from "./PricingCards";
 import { AccountView } from "./AccountView";
 import { CareerTier, SubscriptionTier, TIER_LABEL } from "../../lib/tier";
 import { CareerDomainId } from "../../lib/careerDomains";
-import { Download, FileText, Loader2, Sparkles } from "lucide-react";
+import { Download, FileText, Loader2, Sparkles, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Profile {
@@ -44,17 +44,20 @@ interface Props {
   onProfileUpdate: (p: Profile) => void;
   onSignOut: () => void;
   onChangeCareer: () => void;
+  onBuildCV: () => void;
+  onGoToLanding: () => void;
 }
 
 type View = "matches" | "cvs" | "pricing" | "account";
 
-export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer }: Props) {
+export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer, onBuildCV, onGoToLanding }: Props) {
   const [view, setView] = useState<View>("matches");
   const [matches, setMatches] = useState<Match[]>([]);
   const [tailored, setTailored] = useState<Tailored[]>([]);
   const [loadingMatches, setLoadingMatches] = useState(true);
   const [tailoring, setTailoring] = useState<string | null>(null);
   const [subLoading, setSubLoading] = useState<SubscriptionTier | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   async function loadMatches() {
     setLoadingMatches(true);
@@ -125,6 +128,22 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer 
     }
   }
 
+  async function deleteCV(t: Tailored) {
+    if (!confirm(`Delete tailored CV for "${t.job_title}" at ${t.company}? This cannot be undone.`)) return;
+    setDeleting(t.id);
+    try {
+      const token = await getAccessToken();
+      await api(`/tailored/${t.id}`, { method: "DELETE", token: token ?? undefined });
+      setTailored((prev) => prev.filter((x) => x.id !== t.id));
+      toast.success("Tailored CV deleted.");
+    } catch (e: any) {
+      console.error("Delete failed:", e);
+      toast.error(e?.message ?? "Delete failed");
+    } finally {
+      setDeleting(null);
+    }
+  }
+
   function downloadCV(t: Tailored) {
     const blob = new Blob([t.markdown], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
@@ -150,19 +169,27 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer 
       />
 
       <div className="max-w-7xl mx-auto px-6">
-        <nav className="flex gap-8 border-b border-border">
-          {(["matches", "cvs", "account", "pricing"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`py-4 font-mono text-xs uppercase tracking-widest transition-colors ${
-                view === v ? "text-primary border-b-2 border-primary -mb-px" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {v === "matches" ? "Job Matches" : v === "cvs" ? `Tailored CVs (${tailored.length})` : v === "account" ? "My Account" : "Plans"}
-            </button>
-          ))}
-        </nav>
+        <div className="flex items-center justify-between border-b border-border">
+          <nav className="flex gap-8">
+            {(["matches", "cvs", "account", "pricing"] as const).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`py-4 font-mono text-xs uppercase tracking-widest transition-colors ${
+                  view === v ? "text-primary border-b-2 border-primary -mb-px" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {v === "matches" ? "Job Matches" : v === "cvs" ? `Tailored CVs (${tailored.length})` : v === "account" ? "My Account" : "Plans"}
+              </button>
+            ))}
+          </nav>
+          <button
+            onClick={onGoToLanding}
+            className="py-4 font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors"
+          >
+            ← Back to home
+          </button>
+        </div>
 
         {view === "matches" && (
           <div className="py-10">
@@ -227,14 +254,27 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer 
 
         {view === "cvs" && (
           <div className="py-10">
-            <h2 className="mb-8">Your tailored CVs</h2>
+            <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
+              <h2>Your tailored CVs</h2>
+              <button
+                onClick={onBuildCV}
+                className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-3 font-mono text-xs uppercase tracking-widest hover:opacity-90"
+              >
+                <Wand2 size={14} /> Build from job description
+              </button>
+            </div>
             {tailored.length === 0 ? (
               <div className="border border-dashed border-border p-12 text-center">
                 <FileText size={32} className="text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground mb-4">No tailored CVs yet — match a job to generate one.</p>
-                <button onClick={() => setView("matches")} className="font-mono text-xs uppercase tracking-widest text-primary hover:underline">
-                  Go to matches →
-                </button>
+                <p className="text-muted-foreground mb-4">No tailored CVs yet — paste a job description or match a role.</p>
+                <div className="flex items-center justify-center gap-4">
+                  <button onClick={onBuildCV} className="font-mono text-xs uppercase tracking-widest text-primary hover:underline">
+                    Paste a job description →
+                  </button>
+                  <button onClick={() => setView("matches")} className="font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground">
+                    Or browse matches
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid md:grid-cols-2 gap-px bg-border border border-border">
@@ -248,9 +288,19 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer 
                         <h4>{t.job_title}</h4>
                         <div className="text-muted-foreground text-sm">{t.company}</div>
                       </div>
-                      <button onClick={() => downloadCV(t)} className="p-2 border border-border hover:border-primary" aria-label="Download CV">
-                        <Download size={16} />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => downloadCV(t)} className="p-2 border border-border hover:border-primary" aria-label="Download CV">
+                          <Download size={16} />
+                        </button>
+                        <button
+                          onClick={() => deleteCV(t)}
+                          disabled={deleting === t.id}
+                          className="p-2 border border-border hover:border-destructive hover:text-destructive disabled:opacity-50"
+                          aria-label="Delete CV"
+                        >
+                          {deleting === t.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        </button>
+                      </div>
                     </div>
                     <pre className="bg-background border border-border p-4 text-xs font-mono overflow-x-auto max-h-48 whitespace-pre-wrap">
                       {t.markdown.slice(0, 600)}{t.markdown.length > 600 ? "\n..." : ""}

@@ -3,9 +3,10 @@ import { ArrowRight, Target, FileText, Zap } from "lucide-react";
 interface Props {
   onGetStarted: () => void;
   onSignIn: () => void;
+  onBuildCV: () => void;
 }
 
-export function Landing({ onGetStarted, onSignIn }: Props) {
+export function Landing({ onGetStarted, onSignIn, onBuildCV }: Props) {
   return (
     <div className="min-h-screen bg-background">
       <nav className="border-b border-border">
@@ -28,7 +29,7 @@ export function Landing({ onGetStarted, onSignIn }: Props) {
           </div>
           <div className="lg:col-span-4 space-y-6">
             <p className="text-foreground/80 max-w-md">ATS Engine classifies you by experience tier, matches you to the right roles, and rewrites your CV for each one — automatically.</p>
-            <button onClick={onGetStarted} className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-4 font-mono uppercase tracking-widest text-sm hover:opacity-90">
+            <button onClick={onBuildCV} className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-6 py-4 font-mono uppercase tracking-widest text-sm hover:opacity-90">
               Build my CV <ArrowRight size={16} />
             </button>
           </div>

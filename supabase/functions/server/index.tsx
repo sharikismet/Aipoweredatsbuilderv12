@@ -290,6 +290,83 @@ app.get(`${PREFIX}/tailored`, async (c) => {
   return c.json({ tailored: items });
 });
 
+app.delete(`${PREFIX}/tailored/:id`, async (c) => {
+  const u = await authUser(c);
+  if (!u) return c.json({ error: "Unauthorized" }, 401);
+  try {
+    const id = c.req.param("id");
+    const key = `tailored:${u.id}:${id}`;
+    const existing = await kv.get(key);
+    if (!existing) return c.json({ error: "Tailored CV not found" }, 404);
+    await kv.del(key);
+    return c.json({ ok: true, id });
+  } catch (e) {
+    console.log("delete tailored error:", e);
+    return c.json({ error: `Delete failed: ${String(e)}` }, 500);
+  }
+});
+
+app.post(`${PREFIX}/tailor-custom`, async (c) => {
+  const u = await authUser(c);
+  if (!u) return c.json({ error: "Unauthorized" }, 401);
+  try {
+    const { jobTitle, company, location, description } = await c.req.json();
+    if (!description || description.trim().length < 30) {
+      return c.json({ error: "Paste a real job description (min 30 chars)." }, 400);
+    }
+    const profile = (await kv.get(`profile:${u.id}`)) ?? {};
+    const resume = (await kv.get(`resume:${u.id}`)) ?? {};
+    if (!resume?.profile_id) return c.json({ error: "Complete onboarding before tailoring" }, 400);
+    if ((profile.credits_remaining ?? 0) <= 0 && profile.subscription_tier !== "aggressive") {
+      return c.json({ error: "No tailoring credits remaining. Upgrade your plan." }, 402);
+    }
+    const job = {
+      id: `custom-${Date.now()}`,
+      title: jobTitle?.trim() || "Target Role",
+      company: company?.trim() || "Target Company",
+      location: location?.trim() || "—",
+      level: profile.current_tier ?? "fresh_grad",
+      skills: [],
+      description,
+    };
+    let md: string;
+    let generated_by: "ai" | "template" = "template";
+    try {
+      md = await generateWithClaude(
+        resume,
+        job,
+        profile.career_domain ?? "other",
+        profile.current_tier ?? "fresh_grad",
+        profile.custom_career_label,
+      );
+      generated_by = "ai";
+    } catch (aiErr) {
+      console.log("Claude generation failed for custom JD, falling back:", aiErr);
+      md = renderTailoredMarkdown(resume, job);
+    }
+    const id = crypto.randomUUID();
+    const tailored = {
+      id,
+      profile_id: u.id,
+      job_id: job.id,
+      job_title: job.title,
+      company: job.company,
+      markdown: md,
+      generated_by,
+      created_at: new Date().toISOString(),
+    };
+    await kv.set(`tailored:${u.id}:${id}`, tailored);
+    if (profile.subscription_tier !== "aggressive") {
+      profile.credits_remaining = Math.max(0, (profile.credits_remaining ?? 0) - 1);
+      await kv.set(`profile:${u.id}`, profile);
+    }
+    return c.json({ tailored, profile });
+  } catch (e) {
+    console.log("tailor-custom error:", e);
+    return c.json({ error: `Tailoring failed: ${String(e)}` }, 500);
+  }
+});
+
 function renderTailoredMarkdown(resume: any, job: any): string {
   const name = resume?.contact_info?.full_name ?? "Candidate";
   const email = resume?.contact_info?.email ?? "";
