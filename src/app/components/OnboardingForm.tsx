@@ -11,11 +11,12 @@ interface Props {
   initialEmail?: string;
   domainId?: CareerDomainId | null;
   onComplete: () => void;
+  onBack?: () => void;
 }
 
 const STEPS = ["Contact", "Education", "Experience", "Skills"] as const;
 
-export function OnboardingForm({ initialName, initialEmail, domainId, onComplete }: Props) {
+export function OnboardingForm({ initialName, initialEmail, domainId, onComplete, onBack }: Props) {
   const domain = getDomain(domainId);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -235,7 +236,19 @@ export function OnboardingForm({ initialName, initialEmail, domainId, onComplete
         )}
 
         <div className="mt-12 flex items-center justify-between gap-4">
-          <button type="button" onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0} className="font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground disabled:opacity-30">← Back</button>
+          <button
+            type="button"
+            onClick={() => {
+              if (step === 0 && onBack) {
+                onBack();
+              } else {
+                setStep(Math.max(0, step - 1));
+              }
+            }}
+            className="font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground"
+          >
+            ← Back
+          </button>
           <button type="button" onClick={next} disabled={saving} className="bg-primary text-primary-foreground px-8 py-4 font-mono uppercase tracking-widest text-sm hover:opacity-90 disabled:opacity-50">
             {saving ? "Saving..." : step === STEPS.length - 1 ? "Finish & Classify →" : "Continue →"}
           </button>

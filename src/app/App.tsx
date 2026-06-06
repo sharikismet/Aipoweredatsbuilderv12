@@ -133,6 +133,7 @@ export default function App() {
             await loadProfile();
             setRoute("dashboard");
           }}
+          onBack={() => setRoute("career")}
         />
       )}
       {route === "dashboard" && profile && (
