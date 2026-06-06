@@ -2,18 +2,21 @@ import { useState } from "react";
 import { api, getAccessToken } from "../../lib/supabase";
 import { TagInput } from "./TagInput";
 import { EducationEntry, ExperienceEntry, TIER_LABEL } from "../../lib/tier";
+import { getDomain, CareerDomainId } from "../../lib/careerDomains";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
   initialName?: string;
   initialEmail?: string;
+  domainId?: CareerDomainId | null;
   onComplete: () => void;
 }
 
 const STEPS = ["Contact", "Education", "Experience", "Skills"] as const;
 
-export function OnboardingForm({ initialName, initialEmail, onComplete }: Props) {
+export function OnboardingForm({ initialName, initialEmail, domainId, onComplete }: Props) {
+  const domain = getDomain(domainId);
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
@@ -58,8 +61,10 @@ export function OnboardingForm({ initialName, initialEmail, onComplete }: Props)
     <div className="min-h-screen bg-background">
       <div className="max-w-3xl mx-auto px-6 py-12">
         <div className="mb-12">
-          <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-3">
-            Onboarding · Step {String(step + 1).padStart(2, "0")} / {String(STEPS.length).padStart(2, "0")}
+          <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-3 flex-wrap">
+            <span>Onboarding · Step {String(step + 1).padStart(2, "0")} / {String(STEPS.length).padStart(2, "0")}</span>
+            <span className="text-primary">·</span>
+            <span className="text-primary">{domain.label}</span>
           </div>
           <div className="flex gap-2">
             {STEPS.map((s, i) => (
@@ -105,7 +110,7 @@ export function OnboardingForm({ initialName, initialEmail, onComplete }: Props)
         )}
 
         {step === 2 && (
-          <Section title="Where have you worked?" subtitle="Skip this if you're just starting out — we'll classify you as Fresh Grad.">
+          <Section title={`Where have you worked?`} subtitle={`Showing ${domain.experienceSectionLabel.toLowerCase()} fields. ${domain.achievementsHint} Skip if you're just starting out.`}>
             {experience.length === 0 && (
               <div className="border border-dashed border-border p-8 text-center">
                 <p className="text-muted-foreground mb-4">No experience yet — that's fine. Add one if you have any.</p>
@@ -114,25 +119,43 @@ export function OnboardingForm({ initialName, initialEmail, onComplete }: Props)
             {experience.map((x, i) => (
               <RowCard key={i} onRemove={() => setExperience(experience.filter((_, j) => j !== i))}>
                 <Grid>
-                  <Field label="Company"><Input value={x.company} onChange={(v) => updateAt(experience, setExperience, i, { company: v })} /></Field>
-                  <Field label="Role"><Input value={x.role} onChange={(v) => updateAt(experience, setExperience, i, { role: v })} /></Field>
+                  <Field label="Company / Organization"><Input value={x.company} onChange={(v) => updateAt(experience, setExperience, i, { company: v })} /></Field>
+                  <Field label="Role / Title"><Input value={x.role} onChange={(v) => updateAt(experience, setExperience, i, { role: v })} /></Field>
                   <Field label="Start year"><Input value={x.startYear} onChange={(v) => updateAt(experience, setExperience, i, { startYear: v })} placeholder="2022" /></Field>
                   <Field label="End year">
                     <Input value={x.current ? "Present" : (x.endYear ?? "")} onChange={(v) => updateAt(experience, setExperience, i, { endYear: v, current: false })} placeholder="2024 or leave empty" disabled={x.current} />
                   </Field>
                 </Grid>
-                <div className="flex items-center gap-3 mt-3 flex-wrap">
+
+                {domain.experienceMeta.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-3">{domain.label} details</div>
+                    <Grid>
+                      {domain.experienceMeta.map((mf) => (
+                        <Field key={mf.key} label={mf.label}>
+                          <Input
+                            value={x.meta?.[mf.key] ?? ""}
+                            placeholder={mf.placeholder}
+                            onChange={(v) => updateAt(experience, setExperience, i, { meta: { ...(x.meta ?? {}), [mf.key]: v } })}
+                          />
+                        </Field>
+                      ))}
+                    </Grid>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3 mt-4 flex-wrap">
                   <input type="checkbox" id={`current-${i}`} checked={!!x.current} onChange={(ev) => updateAt(experience, setExperience, i, { current: ev.target.checked, endYear: ev.target.checked ? "" : x.endYear })} className="accent-primary" />
                   <label htmlFor={`current-${i}`} className="cursor-pointer">Currently working here</label>
                   <input type="checkbox" id={`lead-${i}`} checked={!!x.isLeadership} onChange={(ev) => updateAt(experience, setExperience, i, { isLeadership: ev.target.checked })} className="ml-6 accent-primary" />
                   <label htmlFor={`lead-${i}`} className="cursor-pointer">Leadership role</label>
                 </div>
                 <Field label="Achievements (one per line)">
-                  <textarea value={x.bullets.join("\n")} onChange={(ev) => updateAt(experience, setExperience, i, { bullets: ev.target.value.split("\n") })} rows={4} className="w-full bg-input-background border border-border focus:border-primary outline-none px-4 py-3 text-foreground resize-none" placeholder={"Shipped X, reducing Y by Z%\nLed a team of N engineers"} />
+                  <textarea value={x.bullets.join("\n")} onChange={(ev) => updateAt(experience, setExperience, i, { bullets: ev.target.value.split("\n") })} rows={4} className="w-full bg-input-background border border-border focus:border-primary outline-none px-4 py-3 text-foreground resize-none" placeholder={domain.achievementsHint} />
                 </Field>
               </RowCard>
             ))}
-            <AddButton onClick={() => setExperience([...experience, { company: "", role: "", startYear: "", endYear: "", bullets: [""] }])}>Add experience</AddButton>
+            <AddButton onClick={() => setExperience([...experience, { company: "", role: "", startYear: "", endYear: "", bullets: [""], meta: {} }])}>Add experience</AddButton>
 
             <div className="mt-8 flex items-center gap-3 p-4 border border-border bg-card">
               <input type="checkbox" id="exec-lead" checked={heldLeadership} onChange={(e) => setHeldLeadership(e.target.checked)} className="accent-primary" />
@@ -142,8 +165,30 @@ export function OnboardingForm({ initialName, initialEmail, onComplete }: Props)
         )}
 
         {step === 3 && (
-          <Section title="Your core skills" subtitle="Type a skill, press Enter. These power our job matching.">
+          <Section title="Your core skills" subtitle={`Type a skill, press Enter. We've suggested common ones for ${domain.label.toLowerCase()} — click to add.`}>
             <TagInput value={skills} onChange={setSkills} placeholder="e.g. react, typescript, system design" />
+            {domain.suggestedSkills.length > 0 && (
+              <div className="mt-6">
+                <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-3">Suggested for {domain.label}</div>
+                <div className="flex flex-wrap gap-2">
+                  {domain.suggestedSkills.map((s) => {
+                    const active = skills.includes(s);
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => active ? setSkills(skills.filter((k) => k !== s)) : setSkills([...skills, s])}
+                        className={`font-mono text-[10px] uppercase tracking-widest px-3 py-1.5 border transition-colors ${
+                          active ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary hover:text-foreground"
+                        }`}
+                      >
+                        {active ? "− " : "+ "}{s}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {skills.length > 0 && (
               <div className="mt-6 font-mono text-xs uppercase tracking-widest text-muted-foreground">
                 {skills.length} skill{skills.length === 1 ? "" : "s"} added

@@ -3,9 +3,11 @@ import { Toaster } from "sonner";
 import { supabase, api, getAccessToken } from "../lib/supabase";
 import { Landing } from "./components/Landing";
 import { AuthScreen } from "./components/AuthScreen";
+import { CareerPicker } from "./components/CareerPicker";
 import { OnboardingForm } from "./components/OnboardingForm";
 import { Dashboard } from "./components/Dashboard";
 import { CareerTier, SubscriptionTier } from "../lib/tier";
+import { CareerDomainId } from "../lib/careerDomains";
 import { Loader2 } from "lucide-react";
 
 interface Profile {
@@ -16,9 +18,16 @@ interface Profile {
   subscription_tier: SubscriptionTier;
   credits_remaining: number;
   onboarded: boolean;
+  career_domain: CareerDomainId | null;
 }
 
-type Route = "landing" | "auth" | "onboarding" | "dashboard";
+type Route = "landing" | "auth" | "career" | "onboarding" | "dashboard";
+
+function routeForProfile(p: Profile): Route {
+  if (!p.career_domain) return "career";
+  if (!p.onboarded) return "onboarding";
+  return "dashboard";
+}
 
 export default function App() {
   const [route, setRoute] = useState<Route>("landing");
@@ -44,7 +53,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       const p = await loadProfile();
-      if (p) setRoute(p.onboarded ? "dashboard" : "onboarding");
+      if (p) setRoute(routeForProfile(p));
       setBooting(false);
     })();
     const { data: sub } = supabase().auth.onAuthStateChange(async (_event, session) => {
@@ -58,7 +67,7 @@ export default function App() {
 
   async function handleAuthed() {
     const p = await loadProfile();
-    setRoute(p?.onboarded ? "dashboard" : "onboarding");
+    if (p) setRoute(routeForProfile(p));
   }
 
   async function handleSignOut() {
@@ -97,10 +106,20 @@ export default function App() {
         <Landing onGetStarted={() => setRoute("auth")} onSignIn={() => setRoute("auth")} />
       )}
       {route === "auth" && <AuthScreen onAuthed={handleAuthed} onBack={() => setRoute("landing")} />}
+      {route === "career" && profile && (
+        <CareerPicker
+          initial={profile.career_domain}
+          onComplete={async () => {
+            const p = await loadProfile();
+            if (p) setRoute(p.onboarded ? "dashboard" : "onboarding");
+          }}
+        />
+      )}
       {route === "onboarding" && profile && (
         <OnboardingForm
           initialName={profile.full_name}
           initialEmail={profile.email}
+          domainId={profile.career_domain}
           onComplete={async () => {
             await loadProfile();
             setRoute("dashboard");

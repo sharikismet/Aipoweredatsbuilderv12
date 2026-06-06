@@ -11,7 +11,7 @@ interface Plan {
 }
 
 const PLANS: Plan[] = [
-  { id: "free", name: "Free", price: 0, tagline: "For trying it out.", features: ["Build 1 master CV", "Manual PDF export", "Browse matched jobs"] },
+  { id: "free", name: "Free", price: 0, tagline: "For trying it out.", features: ["Build 1 master CV", "3 trial tailored CVs", "Browse matched jobs"] },
   { id: "job_hunter", name: "Job Hunter Pass", price: 14, tagline: "For active applicants.", features: ["Everything in Free", "Daily job-match alerts", "10 automated tailored CVs / mo", "ATS keyword optimization"], highlight: true },
   { id: "aggressive", name: "Aggressive Campaigner", price: 29, tagline: "For full-court press.", features: ["Everything in Job Hunter", "Unlimited tailored CVs", "Priority vector matching", "Auto cover letter for every match"] },
 ];

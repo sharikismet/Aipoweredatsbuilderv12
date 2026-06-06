@@ -16,6 +16,7 @@ export interface ExperienceEntry {
   current?: boolean;
   bullets: string[];
   isLeadership?: boolean;
+  meta?: Record<string, string>;
 }
 
 export interface ResumeInput {

@@ -77,8 +77,9 @@ app.post(`${PREFIX}/signup`, async (c) => {
       full_name: full_name ?? "",
       current_tier: "fresh_grad",
       subscription_tier: "free",
-      credits_remaining: 0,
+      credits_remaining: 3,
       onboarded: false,
+      career_domain: null,
       created_at: new Date().toISOString(),
     };
     await kv.set(`profile:${data.user!.id}`, profile);
@@ -100,10 +101,15 @@ app.get(`${PREFIX}/profile`, async (c) => {
       full_name: "",
       current_tier: "fresh_grad",
       subscription_tier: "free",
-      credits_remaining: 0,
+      credits_remaining: 3,
       onboarded: false,
+      career_domain: null,
       created_at: new Date().toISOString(),
     };
+    await kv.set(`profile:${u.id}`, profile);
+  } else if (profile.subscription_tier === "free" && (profile.credits_remaining ?? 0) === 0 && !profile.free_trial_granted) {
+    profile.credits_remaining = 3;
+    profile.free_trial_granted = true;
     await kv.set(`profile:${u.id}`, profile);
   }
   return c.json({ profile });
@@ -159,12 +165,27 @@ app.get(`${PREFIX}/resume`, async (c) => {
   return c.json({ resume: resume ?? null });
 });
 
+app.put(`${PREFIX}/career`, async (c) => {
+  const u = await authUser(c);
+  if (!u) return c.json({ error: "Unauthorized" }, 401);
+  try {
+    const { career_domain } = await c.req.json();
+    if (!career_domain) return c.json({ error: "career_domain required" }, 400);
+    const profile = (await kv.get(`profile:${u.id}`)) ?? {};
+    profile.career_domain = career_domain;
+    await kv.set(`profile:${u.id}`, profile);
+    return c.json({ profile });
+  } catch (e) {
+    return c.json({ error: `Career save failed: ${String(e)}` }, 500);
+  }
+});
+
 app.post(`${PREFIX}/subscribe`, async (c) => {
   const u = await authUser(c);
   if (!u) return c.json({ error: "Unauthorized" }, 401);
   try {
     const { plan } = await c.req.json();
-    const credits = plan === "aggressive" ? 9999 : plan === "job_hunter" ? 10 : 0;
+    const credits = plan === "aggressive" ? 9999 : plan === "job_hunter" ? 10 : 3;
     const profile = (await kv.get(`profile:${u.id}`)) ?? {};
     profile.subscription_tier = plan;
     profile.credits_remaining = credits;
@@ -228,9 +249,17 @@ app.post(`${PREFIX}/tailor`, async (c) => {
     }
     const job = SEED_JOBS.find((j) => j.id === jobId);
     if (!job) return c.json({ error: "Job not found" }, 404);
-    const md = renderTailoredMarkdown(resume, job);
+    let md: string;
+    let generated_by: "ai" | "template" = "template";
+    try {
+      md = await generateWithClaude(resume, job, profile.career_domain ?? "other");
+      generated_by = "ai";
+    } catch (aiErr) {
+      console.log("Claude generation failed, falling back to template:", aiErr);
+      md = renderTailoredMarkdown(resume, job);
+    }
     const id = crypto.randomUUID();
-    const tailored = { id, profile_id: u.id, job_id: jobId, job_title: job.title, company: job.company, markdown: md, created_at: new Date().toISOString() };
+    const tailored = { id, profile_id: u.id, job_id: jobId, job_title: job.title, company: job.company, markdown: md, generated_by, created_at: new Date().toISOString() };
     await kv.set(`tailored:${u.id}:${id}`, tailored);
     if (profile.subscription_tier !== "aggressive") {
       profile.credits_remaining = Math.max(0, (profile.credits_remaining ?? 0) - 1);
@@ -264,6 +293,81 @@ function renderTailoredMarkdown(resume: any, job: any): string {
     return `- **${x.role ?? ""}**, ${x.company ?? ""} (${x.startYear ?? ""}–${x.current ? "Present" : x.endYear ?? ""})\n${bullets}`;
   }).join("\n");
   return `# ${name}\n${[location, email, phone].filter(Boolean).join(" · ")}\n\n> Tailored for **${job.title}** at **${job.company}** — ${job.location}\n\n## Summary\nProven candidate aligned to the ${job.title} role at ${job.company}. Strengths in ${job.skills.slice(0, 3).join(", ")}.\n\n## Skills\n${skills}\n\n## Experience\n${expMd}\n\n## Education\n${eduMd}\n`;
+}
+
+const DOMAIN_PROMPTS: Record<string, { sectionLabel: string; tone: string; emphasize: string }> = {
+  software: { sectionLabel: "Technical Skills / Experience", tone: "Concise, metrics-driven, no marketing fluff.", emphasize: "Quantify impact: latency cut, throughput, users shipped to. Surface stack relevance to the job description." },
+  management: { sectionLabel: "Leadership Experience / Core Competencies", tone: "Outcome-focused, business language.", emphasize: "Headcount grown, revenue/cost moved, programs launched, P&L." },
+  engineering: { sectionLabel: "Professional Experience / Engineering Skills", tone: "Formal, project-centric, precise.", emphasize: "Projects shipped, specs met, safety / quality wins, licenses." },
+  aviation: { sectionLabel: "Flight Experience / Certifications & Ratings", tone: "Formal, regulator-friendly.", emphasize: "Hours flown, type ratings, safety record, command time, license authority." },
+  medicine: { sectionLabel: "Clinical Experience / Clinical Skills & Certifications", tone: "Formal CV style for licensure and credentialing.", emphasize: "Patient outcomes, procedures, research, specialty, board status." },
+  finance: { sectionLabel: "Professional Experience / Technical Skills", tone: "Numbers-first, conservative tone.", emphasize: "Deals closed, AUM, returns, certifications (CFA, CPA, Series)." },
+  design: { sectionLabel: "Selected Work / Tools & Methods", tone: "Crisp, portfolio-aware, no buzzwords.", emphasize: "Shipped products, design system adoption, research impact, portfolio link." },
+  education: { sectionLabel: "Teaching & Research Experience / Areas of Expertise", tone: "Academic, references publications and outcomes.", emphasize: "Student outcomes, programs designed, publications, grants." },
+  other: { sectionLabel: "Experience / Skills", tone: "Professional, neutral, ATS-friendly.", emphasize: "Quantify impact wherever possible." },
+};
+
+async function generateWithClaude(resume: any, job: any, domainId: string): Promise<string> {
+  const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
+  const domain = DOMAIN_PROMPTS[domainId] ?? DOMAIN_PROMPTS.other;
+
+  const systemPrompt = `You are an expert resume writer producing ATS-optimized, single-page CVs in clean GitHub-flavored Markdown.
+
+DOMAIN: ${domainId.toUpperCase()}
+TONE: ${domain.tone}
+EMPHASIZE: ${domain.emphasize}
+SECTIONS: Use headings appropriate to this domain — typical structure: # Name, contact line, ## Summary, ## ${domain.sectionLabel}, ## Education.
+
+RULES:
+- Output ONLY the markdown CV. No preamble, no closing remarks, no code fences.
+- Rewrite the candidate's existing bullets to align with the target job's keywords and seniority — never invent experience that isn't in the source resume.
+- Lead bullets with strong action verbs and quantified outcomes where the source supports it.
+- Match the language register of the target job description.
+- Surface the most relevant skills first.
+- Maximum one page when rendered.`;
+
+  const userPrompt = `# TARGET JOB
+Title: ${job.title}
+Company: ${job.company}
+Location: ${job.location}
+Seniority: ${job.level}
+Required skills: ${job.skills.join(", ")}
+Description: ${job.description}
+
+# CANDIDATE RESUME (source of truth)
+${JSON.stringify({
+  contact: resume.contact_info,
+  skills: resume.skills,
+  education: resume.education,
+  experience: resume.experience,
+}, null, 2)}
+
+Generate the tailored CV now.`;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 2048,
+      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: userPrompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Anthropic API ${res.status}: ${errText}`);
+  }
+  const data = await res.json();
+  const text = data?.content?.[0]?.text;
+  if (!text) throw new Error(`Anthropic returned no text content: ${JSON.stringify(data).slice(0, 200)}`);
+  return text;
 }
 
 Deno.serve(app.fetch);

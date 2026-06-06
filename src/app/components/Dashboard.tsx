@@ -3,6 +3,7 @@ import { api, getAccessToken } from "../../lib/supabase";
 import { DashboardHeader } from "./DashboardHeader";
 import { PricingCards } from "./PricingCards";
 import { CareerTier, SubscriptionTier, TIER_LABEL } from "../../lib/tier";
+import { CareerDomainId } from "../../lib/careerDomains";
 import { Download, FileText, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
@@ -14,6 +15,7 @@ interface Profile {
   subscription_tier: SubscriptionTier;
   credits_remaining: number;
   onboarded: boolean;
+  career_domain: CareerDomainId | null;
 }
 
 interface Match {
@@ -139,6 +141,7 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut }: Props) {
         tier={profile.current_tier}
         subscription={profile.subscription_tier}
         creditsRemaining={profile.credits_remaining}
+        domainId={profile.career_domain}
         onSignOut={onSignOut}
         onUpgrade={() => setView("pricing")}
       />
