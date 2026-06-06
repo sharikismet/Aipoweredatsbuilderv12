@@ -3,6 +3,7 @@ import { cors } from "npm:hono/cors";
 import { logger } from "npm:hono/logger";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import * as kv from "./kv_store.tsx";
+import { buildResumeSystemPrompt } from "./resumePrompt.tsx";
 
 const app = new Hono();
 app.use("*", logger(console.log));
@@ -256,7 +257,13 @@ app.post(`${PREFIX}/tailor`, async (c) => {
     let md: string;
     let generated_by: "ai" | "template" = "template";
     try {
-      md = await generateWithClaude(resume, job, profile.career_domain ?? "other");
+      md = await generateWithClaude(
+        resume,
+        job,
+        profile.career_domain ?? "other",
+        profile.current_tier ?? "fresh_grad",
+        profile.custom_career_label,
+      );
       generated_by = "ai";
     } catch (aiErr) {
       console.log("Claude generation failed, falling back to template:", aiErr);
@@ -299,37 +306,11 @@ function renderTailoredMarkdown(resume: any, job: any): string {
   return `# ${name}\n${[location, email, phone].filter(Boolean).join(" · ")}\n\n> Tailored for **${job.title}** at **${job.company}** — ${job.location}\n\n## Summary\nProven candidate aligned to the ${job.title} role at ${job.company}. Strengths in ${job.skills.slice(0, 3).join(", ")}.\n\n## Skills\n${skills}\n\n## Experience\n${expMd}\n\n## Education\n${eduMd}\n`;
 }
 
-const DOMAIN_PROMPTS: Record<string, { sectionLabel: string; tone: string; emphasize: string }> = {
-  software: { sectionLabel: "Technical Skills / Experience", tone: "Concise, metrics-driven, no marketing fluff.", emphasize: "Quantify impact: latency cut, throughput, users shipped to. Surface stack relevance to the job description." },
-  management: { sectionLabel: "Leadership Experience / Core Competencies", tone: "Outcome-focused, business language.", emphasize: "Headcount grown, revenue/cost moved, programs launched, P&L." },
-  engineering: { sectionLabel: "Professional Experience / Engineering Skills", tone: "Formal, project-centric, precise.", emphasize: "Projects shipped, specs met, safety / quality wins, licenses." },
-  aviation: { sectionLabel: "Flight Experience / Certifications & Ratings", tone: "Formal, regulator-friendly.", emphasize: "Hours flown, type ratings, safety record, command time, license authority." },
-  medicine: { sectionLabel: "Clinical Experience / Clinical Skills & Certifications", tone: "Formal CV style for licensure and credentialing.", emphasize: "Patient outcomes, procedures, research, specialty, board status." },
-  finance: { sectionLabel: "Professional Experience / Technical Skills", tone: "Numbers-first, conservative tone.", emphasize: "Deals closed, AUM, returns, certifications (CFA, CPA, Series)." },
-  design: { sectionLabel: "Selected Work / Tools & Methods", tone: "Crisp, portfolio-aware, no buzzwords.", emphasize: "Shipped products, design system adoption, research impact, portfolio link." },
-  education: { sectionLabel: "Teaching & Research Experience / Areas of Expertise", tone: "Academic, references publications and outcomes.", emphasize: "Student outcomes, programs designed, publications, grants." },
-  other: { sectionLabel: "Experience / Skills", tone: "Professional, neutral, ATS-friendly.", emphasize: "Quantify impact wherever possible." },
-};
-
-async function generateWithClaude(resume: any, job: any, domainId: string): Promise<string> {
+async function generateWithClaude(resume: any, job: any, domainId: string, tier: string, customCareerLabel?: string | null): Promise<string> {
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY not configured");
-  const domain = DOMAIN_PROMPTS[domainId] ?? DOMAIN_PROMPTS.other;
 
-  const systemPrompt = `You are an expert resume writer producing ATS-optimized, single-page CVs in clean GitHub-flavored Markdown.
-
-DOMAIN: ${domainId.toUpperCase()}
-TONE: ${domain.tone}
-EMPHASIZE: ${domain.emphasize}
-SECTIONS: Use headings appropriate to this domain — typical structure: # Name, contact line, ## Summary, ## ${domain.sectionLabel}, ## Education.
-
-RULES:
-- Output ONLY the markdown CV. No preamble, no closing remarks, no code fences.
-- Rewrite the candidate's existing bullets to align with the target job's keywords and seniority — never invent experience that isn't in the source resume.
-- Lead bullets with strong action verbs and quantified outcomes where the source supports it.
-- Match the language register of the target job description.
-- Surface the most relevant skills first.
-- Maximum one page when rendered.`;
+  const systemPrompt = buildResumeSystemPrompt(resume, job, domainId, tier, customCareerLabel);
 
   const userPrompt = `# TARGET JOB
 Title: ${job.title}
@@ -339,7 +320,7 @@ Seniority: ${job.level}
 Required skills: ${job.skills.join(", ")}
 Description: ${job.description}
 
-# CANDIDATE RESUME (source of truth)
+# CANDIDATE RESUME DATA
 ${JSON.stringify({
   contact: resume.contact_info,
   profile_extras: resume.contact_info?.extras ?? {},
@@ -349,9 +330,7 @@ ${JSON.stringify({
   leadership_experience: resume.heldLeadershipRole,
 }, null, 2)}
 
-When relevant, surface profile_extras like GitHub, license numbers, portfolio, or certifications in the contact header or a dedicated section. Use employmentType on each experience (internship, trainee, contract, executive, etc.) to set the right framing.
-
-Generate the tailored CV now.`;
+Generate the tailored ATS-optimized resume now.`;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -361,8 +340,9 @@ Generate the tailored CV now.`;
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 2048,
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4000,
+      temperature: 0.7,
       system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userPrompt }],
     }),
