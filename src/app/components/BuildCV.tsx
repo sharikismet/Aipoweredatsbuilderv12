@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ArrowLeft, Download, Loader2, Sparkles, FileText, LayoutTemplate } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Sparkles, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { api, getAccessToken } from "../../lib/supabase";
 
@@ -33,7 +33,6 @@ export function BuildCV({ profile, onProfileUpdate, onBack, onSaved }: Props) {
   const [company, setCompany] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
-  const [template, setTemplate] = useState<"classic" | "modern" | "minimal">("classic");
   const [generating, setGenerating] = useState(false);
   const [markdown, setMarkdown] = useState<string>("");
   const [meta, setMeta] = useState<Tailored | null>(null);
@@ -53,11 +52,11 @@ export function BuildCV({ profile, onProfileUpdate, onBack, onSaved }: Props) {
       const res = await api<{ tailored: Tailored; profile: Profile }>("/tailor-custom", {
         method: "POST",
         token: token ?? undefined,
-        body: { jobTitle, company, location, description, template },
+        body: { jobTitle, company, location, description, template: "classic" },
       });
       onProfileUpdate(res.profile);
       setMeta(res.tailored);
-      // simulate stream: reveal chunks for a "real-time" feel
+      
       const full = res.tailored.markdown;
       const step = Math.max(20, Math.floor(full.length / 80));
       let i = 0;
@@ -124,7 +123,7 @@ export function BuildCV({ profile, onProfileUpdate, onBack, onSaved }: Props) {
       <div className="max-w-7xl mx-auto px-6 py-10">
         <div className="mb-10 max-w-3xl">
           <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-2">
-            Build my CV / paste the job description
+            Tailor to Job Description
           </div>
           <h1 className="mb-3">
             Beat the <span className="text-primary">ATS</span> with one paste.
@@ -136,32 +135,6 @@ export function BuildCV({ profile, onProfileUpdate, onBack, onSaved }: Props) {
 
         <div className="grid lg:grid-cols-12 gap-8">
           <div className="lg:col-span-5 space-y-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <LayoutTemplate size={14} className="text-primary" />
-                <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Pick a template</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                {([
-                  { id: "classic", name: "Classic", desc: "Summary · Experience · Education" },
-                  { id: "modern", name: "Modern", desc: "Profile · Competencies · Roles" },
-                  { id: "minimal", name: "Minimal", desc: "Tight · No summary" },
-                ] as const).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setTemplate(t.id)}
-                    className={`text-left p-3 border transition-colors ${template === t.id ? "border-primary bg-primary/5" : "border-border hover:border-foreground"}`}
-                  >
-                    <div className="font-mono text-[11px] uppercase tracking-widest mb-1">{t.name}</div>
-                    <div className="text-[10px] text-muted-foreground leading-snug">{t.desc}</div>
-                  </button>
-                ))}
-              </div>
-              <p className="mt-2 text-[10px] text-muted-foreground">
-                Your account details (contact, education, experience, skills) are pulled automatically.
-              </p>
-            </div>
             <div className="grid grid-cols-2 gap-3">
               <label className="block">
                 <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">Job title</span>
@@ -202,9 +175,6 @@ export function BuildCV({ profile, onProfileUpdate, onBack, onSaved }: Props) {
                 rows={18}
                 className="mt-1 w-full bg-card border border-border px-3 py-3 font-mono text-xs leading-relaxed focus:outline-none focus:border-primary resize-y"
               />
-              <div className="mt-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                {description.length} chars
-              </div>
             </label>
             <button
               onClick={generate}
@@ -250,7 +220,6 @@ export function BuildCV({ profile, onProfileUpdate, onBack, onSaved }: Props) {
           </div>
         </div>
       </div>
-
       <style>{`
         .resume-preview h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 4px; color: #111; }
         .resume-preview h2 { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; border-bottom: 1.5px solid #111; padding-bottom: 4px; margin: 22px 0 10px; color: #111; }
@@ -258,14 +227,8 @@ export function BuildCV({ profile, onProfileUpdate, onBack, onSaved }: Props) {
         .resume-preview h4 { font-size: 13px; font-weight: 700; margin: 10px 0 2px; color: #111; }
         .resume-preview p { font-size: 12px; line-height: 1.55; margin: 4px 0; color: #222; }
         .resume-preview ul { padding-left: 18px; margin: 4px 0 8px; }
-        .resume-preview ol { padding-left: 18px; margin: 4px 0 8px; }
         .resume-preview li { font-size: 12px; line-height: 1.55; margin: 2px 0; color: #222; }
         .resume-preview strong { font-weight: 700; color: #111; }
-        .resume-preview em { font-style: italic; }
-        .resume-preview a { color: #111; text-decoration: underline; }
-        .resume-preview hr { border: 0; border-top: 1px solid #ccc; margin: 14px 0; }
-        .resume-preview blockquote { border-left: 3px solid #888; padding-left: 10px; color: #444; margin: 8px 0; font-size: 12px; }
-        .resume-preview code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; background: #f1efe8; padding: 1px 4px; }
         .resume-preview h1 + p { font-size: 11.5px; color: #333; }
       `}</style>
     </div>

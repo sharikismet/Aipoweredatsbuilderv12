@@ -5,7 +5,7 @@ import { PricingCards } from "./PricingCards";
 import { AccountView } from "./AccountView";
 import { CareerTier, SubscriptionTier, TIER_LABEL } from "../../lib/tier";
 import { CareerDomainId } from "../../lib/careerDomains";
-import { Download, FileText, Loader2, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { Download, FileText, Loader2, Sparkles, Trash2, Wand2, LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 
 interface Profile {
@@ -45,13 +45,15 @@ interface Props {
   onSignOut: () => void;
   onChangeCareer: () => void;
   onBuildCV: () => void;
+  onOpenGallery: () => void;
+  onOpenCV: (cv: Tailored) => void;
   onGoToLanding: () => void;
   onGoToAdmin?: () => void;
 }
 
 type View = "matches" | "cvs" | "pricing" | "account";
 
-export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer, onBuildCV, onGoToLanding, onGoToAdmin }: Props) {
+export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer, onBuildCV, onOpenGallery, onOpenCV, onGoToLanding, onGoToAdmin }: Props) {
   const [view, setView] = useState<View>("matches");
   const [matches, setMatches] = useState<Match[]>([]);
   const [tailored, setTailored] = useState<Tailored[]>([]);
@@ -73,6 +75,7 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer,
       setLoadingMatches(false);
     }
   }
+  
   async function loadTailored() {
     try {
       const token = await getAccessToken();
@@ -145,16 +148,6 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer,
     }
   }
 
-  function downloadCV(t: Tailored) {
-    const blob = new Blob([t.markdown], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${t.job_title.replace(/\s+/g, "-")}-${t.company.replace(/\s+/g, "-")}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader
@@ -203,119 +196,133 @@ export function Dashboard({ profile, onProfileUpdate, onSignOut, onChangeCareer,
         </div>
 
         {view === "matches" && (
-          <div className="py-10">
-            <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
-              <div>
-                <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-2">
-                  Filtered for {TIER_LABEL[profile.current_tier]}
-                </div>
-                <h2>Today's matches</h2>
-              </div>
-              <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-                {matches.length} roles · sorted by fit
-              </div>
-            </div>
+           <div className="py-10">
+           <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
+             <div>
+               <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground mb-2">
+                 Filtered for {TIER_LABEL[profile.current_tier]}
+               </div>
+               <h2>Today's matches</h2>
+             </div>
+             <div className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
+               {matches.length} roles · sorted by fit
+             </div>
+           </div>
 
-            {loadingMatches ? (
-              <div className="flex items-center gap-2 text-muted-foreground font-mono text-xs uppercase tracking-widest">
-                <Loader2 size={14} className="animate-spin" /> Loading
-              </div>
-            ) : (
-              <div className="space-y-px bg-border border border-border">
-                {matches.map((m) => (
-                  <article key={m.id} className="bg-card p-6 grid lg:grid-cols-12 gap-6 items-start">
-                    <div className="lg:col-span-7">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <span className="font-mono text-xs uppercase tracking-widest text-primary">{TIER_LABEL[m.level]}</span>
-                        <span className="text-muted-foreground">·</span>
-                        <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{m.location}</span>
-                      </div>
-                      <h3 className="mb-1">{m.title}</h3>
-                      <div className="text-muted-foreground mb-3">{m.company}</div>
-                      <p className="text-sm text-muted-foreground">{m.description}</p>
-                      <div className="flex flex-wrap gap-2 mt-4">
-                        {m.skills.map((s) => (
-                          <span key={s} className="font-mono text-[10px] uppercase tracking-widest border border-border px-2 py-1">{s}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="lg:col-span-3 flex flex-col items-start lg:items-center justify-center">
-                      <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Match score</div>
-                      <div style={{ fontFamily: "var(--font-display)", fontSize: "3rem", lineHeight: 1, fontWeight: 900 }} className={m.score >= 70 ? "text-primary" : "text-foreground"}>
-                        {m.score}
-                      </div>
-                      <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{m.overlap} skill overlap</div>
-                    </div>
-                    <div className="lg:col-span-2 flex lg:justify-end">
-                      <button
-                        onClick={() => tailor(m.id)}
-                        disabled={tailoring === m.id}
-                        className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-3 font-mono text-xs uppercase tracking-widest hover:opacity-90 disabled:opacity-50 w-full lg:w-auto justify-center"
-                      >
-                        {tailoring === m.id ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                        Tailor CV
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
+           {loadingMatches ? (
+             <div className="flex items-center gap-2 text-muted-foreground font-mono text-xs uppercase tracking-widest">
+               <Loader2 size={14} className="animate-spin" /> Loading
+             </div>
+           ) : (
+             <div className="space-y-px bg-border border border-border">
+               {matches.map((m) => (
+                 <article key={m.id} className="bg-card p-6 grid lg:grid-cols-12 gap-6 items-start">
+                   <div className="lg:col-span-7">
+                     <div className="flex items-center gap-3 mb-2 flex-wrap">
+                       <span className="font-mono text-xs uppercase tracking-widest text-primary">{TIER_LABEL[m.level]}</span>
+                       <span className="text-muted-foreground">·</span>
+                       <span className="font-mono text-xs uppercase tracking-widest text-muted-foreground">{m.location}</span>
+                     </div>
+                     <h3 className="mb-1">{m.title}</h3>
+                     <div className="text-muted-foreground mb-3">{m.company}</div>
+                     <p className="text-sm text-muted-foreground">{m.description}</p>
+                     <div className="flex flex-wrap gap-2 mt-4">
+                       {m.skills.map((s) => (
+                         <span key={s} className="font-mono text-[10px] uppercase tracking-widest border border-border px-2 py-1">{s}</span>
+                       ))}
+                     </div>
+                   </div>
+                   <div className="lg:col-span-3 flex flex-col items-start lg:items-center justify-center">
+                     <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Match score</div>
+                     <div style={{ fontFamily: "var(--font-display)", fontSize: "3rem", lineHeight: 1, fontWeight: 900 }} className={m.score >= 70 ? "text-primary" : "text-foreground"}>
+                       {m.score}
+                     </div>
+                     <div className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mt-1">{m.overlap} skill overlap</div>
+                   </div>
+                   <div className="lg:col-span-2 flex lg:justify-end">
+                     <button
+                       onClick={() => tailor(m.id)}
+                       disabled={tailoring === m.id}
+                       className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-3 font-mono text-xs uppercase tracking-widest hover:opacity-90 disabled:opacity-50 w-full lg:w-auto justify-center"
+                     >
+                       {tailoring === m.id ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                       Tailor CV
+                     </button>
+                   </div>
+                 </article>
+               ))}
+             </div>
+           )}
+         </div>
         )}
 
         {view === "cvs" && (
           <div className="py-10">
-            <div className="flex items-end justify-between mb-8 flex-wrap gap-4">
-              <h2>Your tailored CVs</h2>
-              <button
-                onClick={onBuildCV}
-                className="inline-flex items-center gap-2 bg-primary text-primary-foreground px-4 py-3 font-mono text-xs uppercase tracking-widest hover:opacity-90"
+            <h2 className="mb-6">Generate New CV</h2>
+            
+            {/* The New Action Split */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+              <div 
+                className="bg-card border border-border p-8 flex flex-col items-start text-left hover:border-primary transition-colors cursor-pointer group" 
+                onClick={onOpenGallery}
               >
-                <Wand2 size={14} /> Build from job description
-              </button>
+                <div className="flex items-center gap-3 mb-3">
+                  <LayoutTemplate size={20} className="text-primary" />
+                  <h3 className="text-xl m-0">Build Standard CV</h3>
+                </div>
+                <p className="text-muted-foreground text-sm mb-6">Choose from our visual gallery of ATS-optimized templates and generate instantly from your profile data.</p>
+                <div className="mt-auto font-mono text-xs uppercase tracking-widest text-primary group-hover:underline">Browse Templates →</div>
+              </div>
+
+              <div 
+                className="bg-card border border-border p-8 flex flex-col items-start text-left hover:border-primary transition-colors cursor-pointer group" 
+                onClick={onBuildCV}
+              >
+                <div className="flex items-center gap-3 mb-3">
+                  <Wand2 size={20} className="text-primary" />
+                  <h3 className="text-xl m-0">Tailor to Job Description</h3>
+                </div>
+                <p className="text-muted-foreground text-sm mb-6">Paste a specific LinkedIn or Indeed job post. We will rewrite your CV to match their exact keywords.</p>
+                <div className="mt-auto font-mono text-xs uppercase tracking-widest text-primary group-hover:underline">Paste JD →</div>
+              </div>
             </div>
+
+            <div className="flex items-end justify-between mb-6 flex-wrap gap-4">
+              <h2>Your Generated CV History</h2>
+            </div>
+            
             {tailored.length === 0 ? (
               <div className="border border-dashed border-border p-12 text-center">
                 <FileText size={32} className="text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground mb-4">No tailored CVs yet — paste a job description or match a role.</p>
-                <div className="flex items-center justify-center gap-4">
-                  <button onClick={onBuildCV} className="font-mono text-xs uppercase tracking-widest text-primary hover:underline">
-                    Paste a job description →
-                  </button>
-                  <button onClick={() => setView("matches")} className="font-mono text-xs uppercase tracking-widest text-muted-foreground hover:text-foreground">
-                    Or browse matches
-                  </button>
-                </div>
+                <p className="text-muted-foreground mb-4">No CVs generated yet.</p>
               </div>
             ) : (
-              <div className="grid md:grid-cols-2 gap-px bg-border border border-border">
+              <div className="grid md:grid-cols-2 gap-4">
                 {tailored.map((t) => (
-                  <div key={t.id} className="bg-card p-6">
-                    <div className="flex items-start justify-between gap-4 mb-4">
-                      <div>
-                        <div className="font-mono text-xs uppercase tracking-widest text-primary mb-1">
-                          {new Date(t.created_at).toLocaleDateString()}
-                        </div>
-                        <h4>{t.job_title}</h4>
-                        <div className="text-muted-foreground text-sm">{t.company}</div>
+                  <div key={t.id} className="bg-card border border-border p-6 hover:border-foreground transition-colors flex flex-col">
+                    <div className="flex-1">
+                      <div className="font-mono text-xs uppercase tracking-widest text-primary mb-2">
+                        {new Date(t.created_at).toLocaleDateString()}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => downloadCV(t)} className="p-2 border border-border hover:border-primary" aria-label="Download CV">
-                          <Download size={16} />
-                        </button>
-                        <button
-                          onClick={() => deleteCV(t)}
-                          disabled={deleting === t.id}
-                          className="p-2 border border-border hover:border-destructive hover:text-destructive disabled:opacity-50"
-                          aria-label="Delete CV"
-                        >
-                          {deleting === t.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                        </button>
-                      </div>
+                      <h4 className="text-lg mb-1">{t.job_title || "Standard Resume"}</h4>
+                      <div className="text-muted-foreground text-sm mb-6">{t.company || "General Export"}</div>
                     </div>
-                    <pre className="bg-background border border-border p-4 text-xs font-mono overflow-x-auto max-h-48 whitespace-pre-wrap">
-                      {t.markdown.slice(0, 600)}{t.markdown.length > 600 ? "\n..." : ""}
-                    </pre>
+                    <div className="flex items-center justify-between border-t border-border pt-4 mt-auto">
+                      <button 
+                        onClick={() => onOpenCV(t)} 
+                        className="font-mono text-xs uppercase tracking-widest text-foreground hover:text-primary transition-colors"
+                      >
+                        Open & Export →
+                      </button>
+                      <button
+                        onClick={() => deleteCV(t)}
+                        disabled={deleting === t.id}
+                        className="text-muted-foreground hover:text-destructive disabled:opacity-50 transition-colors"
+                        aria-label="Delete CV"
+                      >
+                        {deleting === t.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
