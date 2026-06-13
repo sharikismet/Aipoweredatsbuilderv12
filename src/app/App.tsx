@@ -75,7 +75,6 @@ export default function App() {
   async function handleAuthed() {
     const p = await loadProfile();
     if (!p) return;
-    
     if (pendingAfterAuth === "build" || pendingAfterAuth === "template-gallery") {
       const target = pendingAfterAuth;
       setPendingAfterAuth(null);
@@ -90,17 +89,16 @@ export default function App() {
 
   function handleBuildMyCV() {
     setPrevRoute("landing"); 
-    
     if (profile && profile.onboarded && profile.career_domain) {
-      setRoute("template-gallery");
+      setRoute("build");
       return;
     }
     if (profile) {
-      setPendingAfterAuth("template-gallery");
+      setPendingAfterAuth("build");
       setRoute(routeForProfile(profile));
       return;
     }
-    setPendingAfterAuth("template-gallery");
+    setPendingAfterAuth("build");
     setRoute("auth-signup");
   }
 
@@ -114,7 +112,7 @@ export default function App() {
         body: { template: "classic" },
       });
       if (res.profile) setProfile(res.profile);
-      toast.success("Baseline CV ready — find it under Tailored CVs.");
+      toast.success("Baseline CV ready.");
     } catch (e: any) {
       console.error("baseline gen failed:", e);
       toast.error(e?.message ?? "Baseline generation failed");
@@ -141,66 +139,19 @@ export default function App() {
 
   return (
     <div className="size-full">
-      <Toaster
-        position="bottom-right"
-        theme="dark"
-        toastOptions={{
-          style: {
-            background: "var(--card)",
-            color: "var(--foreground)",
-            border: "1px solid var(--border)",
-            borderRadius: "0",
-            fontFamily: "var(--font-sans)",
-          },
-        }}
-      />
+      <Toaster position="bottom-right" theme="dark" toastOptions={{ style: { background: "var(--card)", color: "var(--foreground)", border: "1px solid var(--border)", borderRadius: "0", fontFamily: "var(--font-sans)" } }} />
 
       {route === "landing" && (
-        <Landing
-          profile={profile}
-          onGetStarted={() => setRoute("auth-signup")}
-          onSignIn={() => setRoute("auth-signin")}
-          onBuildCV={handleBuildMyCV}
-          onGoToAccount={() => setRoute("dashboard")}
-          onSignOut={handleSignOut}
-        />
+        <Landing profile={profile} onGetStarted={() => setRoute("auth-signup")} onSignIn={() => setRoute("auth-signin")} onBuildCV={handleBuildMyCV} onGoToAccount={() => setRoute("dashboard")} onSignOut={handleSignOut} />
       )}
       {(route === "auth-signup" || route === "auth-signin") && (
-        <AuthScreen
-          onAuthed={handleAuthed}
-          onBack={() => setRoute("landing")}
-          initialMode={route === "auth-signin" ? "signin" : "signup"}
-        />
+        <AuthScreen onAuthed={handleAuthed} onBack={() => setRoute("landing")} initialMode={route === "auth-signin" ? "signin" : "signup"} />
       )}
       {route === "career" && profile && (
-        <CareerPicker
-          initial={profile.career_domain}
-          initialCustomLabel={(profile as any).custom_career_label ?? null}
-          onComplete={async () => {
-            const p = await loadProfile();
-            if (p) setRoute(p.onboarded ? "dashboard" : "onboarding");
-          }}
-          onBack={profile.onboarded ? () => setRoute("dashboard") : handleSignOut}
-          backLabel={profile.onboarded ? "← Back to dashboard" : "Sign out & go back"}
-        />
+        <CareerPicker initial={profile.career_domain} initialCustomLabel={(profile as any).custom_career_label ?? null} onComplete={async () => { const p = await loadProfile(); if (p) setRoute(p.onboarded ? "dashboard" : "onboarding"); }} onBack={profile.onboarded ? () => setRoute("dashboard") : handleSignOut} backLabel={profile.onboarded ? "← Back to dashboard" : "Sign out & go back"} />
       )}
       {route === "onboarding" && profile && (
-        <OnboardingForm
-          initialName={profile.full_name}
-          initialEmail={profile.email}
-          domainId={profile.career_domain}
-          onComplete={async () => {
-            await loadProfile();
-            if (pendingAfterAuth === "build" || pendingAfterAuth === "template-gallery") {
-              const target = pendingAfterAuth;
-              setPendingAfterAuth(null);
-              setRoute(target);
-            } else {
-              await generateBaselineAndGo();
-            }
-          }}
-          onBack={() => setRoute("career")}
-        />
+        <OnboardingForm initialName={profile.full_name} initialEmail={profile.email} domainId={profile.career_domain} onComplete={async () => { await loadProfile(); if (pendingAfterAuth === "build" || pendingAfterAuth === "template-gallery") { const target = pendingAfterAuth; setPendingAfterAuth(null); setRoute(target); } else { await generateBaselineAndGo(); } }} onBack={() => setRoute("career")} />
       )}
       {route === "dashboard" && profile && (
         <Dashboard
@@ -208,18 +159,9 @@ export default function App() {
           onProfileUpdate={setProfile}
           onSignOut={handleSignOut}
           onChangeCareer={() => setRoute("career")}
-          onBuildCV={() => {
-            setPrevRoute("dashboard"); 
-            setRoute("build");
-          }}
-          onOpenGallery={() => {
-            setPrevRoute("dashboard"); 
-            setRoute("template-gallery");
-          }}
-          onOpenCV={(cv) => {
-            setActiveCV(cv);
-            setRoute("view-cv");
-          }}
+          onBuildCV={() => { setPrevRoute("dashboard"); setRoute("build"); }}
+          onOpenGallery={() => { setPrevRoute("dashboard"); setRoute("template-gallery"); }}
+          onOpenCV={(cv) => { setActiveCV(cv); setRoute("view-cv"); }}
           onGoToLanding={() => setRoute("landing")}
           onGoToAdmin={() => setRoute("admin")}
         />
@@ -228,36 +170,23 @@ export default function App() {
         <TemplateGallery
           onBack={() => setRoute(prevRoute)} 
           onSelectTemplate={async (templateId) => {
+            if (profile.credits_remaining <= 0) { toast.error("You have 0 credits remaining. Upgrade your plan."); setRoute("dashboard"); return; }
             try {
               const token = await getAccessToken();
               toast.message("Generating your ATS Template CV…");
-              const res = await api<{ profile: Profile; tailored?: any }>("/tailor-baseline", {
-                method: "POST",
-                token: token ?? undefined,
-                body: { template: templateId === "ai-auto" ? "classic" : templateId },
-              });
+              const res = await api<{ profile: Profile; tailored?: any }>("/tailor-baseline", { method: "POST", token: token ?? undefined, body: { template: templateId === "ai-auto" ? "classic" : templateId } });
               if (res.profile) setProfile(res.profile);
-              toast.success("CV ready — find it under your CV history.");
-              setRoute("dashboard");
-            } catch (e: any) {
-              console.error("Template gen failed:", e);
-              toast.error(e?.message ?? "Template generation failed");
-            }
+              toast.success("CV ready!");
+              if (res.tailored) { setActiveCV(res.tailored); setRoute("view-cv"); } else { setRoute("dashboard"); }
+            } catch (e: any) { toast.error(e?.message ?? "Template generation failed"); }
           }}
         />
       )}
       {route === "build" && profile && (
-        <BuildCV
-          profile={profile}
-          onProfileUpdate={(p) => setProfile((cur) => ({ ...(cur as Profile), ...(p as any) }))}
-          onBack={() => setRoute(prevRoute)}
-        />
+        <BuildCV profile={profile} onProfileUpdate={(p) => setProfile((cur) => ({ ...(cur as Profile), ...(p as any) }))} onBack={() => setRoute(prevRoute)} />
       )}
       {route === "view-cv" && activeCV && (
-        <CVViewer 
-          cv={activeCV} 
-          onBack={() => setRoute("dashboard")} 
-        />
+        <CVViewer cv={activeCV} onBack={() => setRoute("dashboard")} />
       )}
       {route === "admin" && profile && (
         <AdminPage onBack={() => setRoute("dashboard")} />
